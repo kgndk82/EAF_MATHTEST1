@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EAF 1x1 Practice Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .game-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 800px;
+            width: 100%;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        input {
+            font-size: 16px;
+            padding: 5px;
+            width: 200px;
+            margin-bottom: 10px;
+        }
+        #timer {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        #question {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        #task-counter {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #ranking {
+            margin-top: 20px;
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        #tasks-overview {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .task-result {
+            font-size: 14px;
+            border: 1px solid #ddd;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .full-points {
+            background-color: #90EE90;
+        }
+        .medal {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            vertical-align: middle;
+        }
+        .diamond { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2300ffff"><path d="M12 2L2 12 12 22 22 12 12 2z"/></svg>'); }
+        .gold { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffd700"><path d="M12 2L2 12 12 22 22 12 12 2z"/></svg>'); }
+        .silver { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23c0c0c0"><path d="M12 2L2 12 12 22 22 12 12 2z"/></svg>'); }
+        .bronze { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cd7f32"><path d="M12 2L2 12 12 22 22 12 12 2z"/></svg>'); }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>EAF 1x1 Practice Game</h1>
+        <div id="start-screen">
+            <p>Welcome to the EAF 1x1 Practice Game!</p>
+            <p>You will have 30 seconds to answer each of 30 questions.</p>
+            <p>Questions will be a mix of multiplication and division.</p>
+            <p>Enter your name and click the button below when you're ready to start.</p>
+            <input type="text" id="player-name" placeholder="Enter your name">
+            <button id="start-game">Start Game</button>
+        </div>
+        <div id="game" style="display: none;">
+            <div id="timer">30</div>
+            <div id="task-counter">Task: 1 / 30</div>
+            <div id="question"></div>
+            <input type="number" id="answer" placeholder="Your answer">
+            <button id="submit">Submit</button>
+        </div>
+        <div id="result" style="display: none;">
+            <h2>Well Done, let's see the Results!</h2>
+            <button id="see-result">See Result</button>
+        </div>
+        <div id="overview" style="display: none;">
+            <h2>Game Overview</h2>
+            <div id="tasks-overview"></div>
+            <p>Total Points: <span id="total-points"></span></p>
+            <button id="restart">Play Again</button>
+        </div>
+        <div id="ranking"></div>
+    </div>
+
+    <script>
+        const startScreen = document.getElementById('start-screen');
+        const game = document.getElementById('game');
+        const resultDiv = document.getElementById('result');
+        const overviewDiv = document.getElementById('overview');
+        const questionDiv = document.getElementById('question');
+        const answerInput = document.getElementById('answer');
+        const submitBtn = document.getElementById('submit');
+        const seeResultBtn = document.getElementById('see-result');
+        const restartBtn = document.getElementById('restart');
+        const startGameBtn = document.getElementById('start-game');
+        const playerNameInput = document.getElementById('player-name');
+        const tasksOverviewDiv = document.getElementById('tasks-overview');
+        const totalPointsSpan = document.getElementById('total-points');
+        const timerDiv = document.getElementById('timer');
+        const taskCounterDiv = document.getElementById('task-counter');
+        const rankingDiv = document.getElementById('ranking');
+
+        let currentQuestion = 0;
+        let attempts = 0;
+        let points = 0;
+        let tasks = [];
+        let timer;
+        let timeLeft;
+        let startTime;
+        let playerName;
+        let rankings = JSON.parse(localStorage.getItem('rankings')) || [];
+
+        function generateQuestion() {
+            const isMultiplication = Math.random() < 0.5;
+            if (isMultiplication) {
+                const num1 = Math.floor(Math.random() * 9) + 1;
+                const num2 = (Math.floor(Math.random() * 9) + 1) * 10;
+                return { num1, num2, answer: num1 * num2, type: 'multiplication' };
+            } else {
+                let dividend, divisor, quotient;
+                do {
+                    quotient = Math.floor(Math.random() * 100) + 1;
+                    divisor = Math.floor(Math.random() * 99) + 1;
+                    if (divisor > 9) {
+                        divisor = Math.floor(divisor / 10) * 10;
+                    }
+                    dividend = quotient * divisor;
+                } while (dividend > 1000 || dividend % 10 !== 0);
+                
+                return { dividend, divisor, answer: quotient, type: 'division' };
+            }
+        }
+
+        function startGame() {
+            playerName = playerNameInput.value.trim() || "Anonymous";
+            startScreen.style.display = 'none';
+            game.style.display = 'block';
+            currentQuestion = 0;
+            points = 0;
+            tasks = [];
+            nextQuestion();
+        }
+
+        function nextQuestion() {
+            if (currentQuestion < 30) {
+                const question = generateQuestion();
+                tasks.push({ ...question, points: 0, time: 0 });
+                if (question.type === 'multiplication') {
+                    questionDiv.textContent = `${question.num1} × ${question.num2} = ?`;
+                } else {
+                    questionDiv.textContent = `${question.dividend} ÷ ${question.divisor} = ?`;
+                }
+                taskCounterDiv.textContent = `Task: ${currentQuestion + 1} / 30`;
+                answerInput.value = '';
+                attempts = 0;
+                timeLeft = 30;
+                startTime = Date.now();
+                updateTimer();
+                timer = setInterval(updateTimer, 1000);
+            } else {
+                endGame();
+            }
+        }
+
+        function updateTimer() {
+            timerDiv.textContent = timeLeft;
+            if (timeLeft === 0) {
+                clearInterval(timer);
+                checkAnswer();
+            }
+            timeLeft--;
+        }
+
+        function calculatePoints(elapsedTime, attempt) {
+            const maxPoints = [10, 5, 3][attempt];
+            const timeThreshold = 5000; // 5 seconds
+            if (elapsedTime <= timeThreshold) {
+                return maxPoints;
+            } else {
+                const remainingTime = 30000 - elapsedTime; // 30 seconds total
+                return Math.max(Math.floor(maxPoints * remainingTime / 25000), 
+                                attempt > 0 ? [5, 3, 1][attempt] : 1);
+            }
+        }
+
+        function checkAnswer() {
+            clearInterval(timer);
+            const elapsedTime = Date.now() - startTime;
+            const userAnswer = parseInt(answerInput.value);
+            const correctAnswer = tasks[currentQuestion].answer;
+
+            if (userAnswer === correctAnswer) {
+                const taskPoints = calculatePoints(elapsedTime, attempts);
+                tasks[currentQuestion].points = taskPoints;
+                tasks[currentQuestion].time = elapsedTime;
+                points += taskPoints;
+                currentQuestion++;
+                nextQuestion();
+            } else {
+                attempts++;
+                if (attempts >= 3) {
+                    tasks[currentQuestion].time = 30000; // Max time for incorrect answers
+                    currentQuestion++;
+                    nextQuestion();
+                } else {
+                    alert('Incorrect. Try again!');
+                    startTime = Date.now(); // Reset timer for next attempt
+                }
+            }
+        }
+
+        function endGame() {
+            game.style.display = 'none';
+            resultDiv.style.display = 'block';
+        }
+
+        function showOverview() {
+            resultDiv.style.display = 'none';
+            overviewDiv.style.display = 'block';
+            tasksOverviewDiv.innerHTML = tasks.map((task, index) => {
+                let questionText;
+                if (task.type === 'multiplication') {
+                    questionText = `${task.num1} × ${task.num2} = ${task.answer}`;
+                } else {
+                    questionText = `${task.dividend} ÷ ${task.divisor} = ${task.answer}`;
+                }
+                const fullPoints = task.points === 10;
+                return `<div class="task-result ${fullPoints ? 'full-points' : ''}">
+                    Task ${index + 1}: ${task.points} pts<br>${questionText}
+                </div>`;
+            }).join('');
+            totalPointsSpan.textContent = points;
+            updateRanking();
+        }
+
+        function getMedal(tasks) {
+            const fastTasks = tasks.filter(task => task.time <= 5000 && task.points > 0).length;
+            if (fastTasks === 30) return 'diamond';
+            if (fastTasks >= 20) return 'gold';
+            if (fastTasks >= 15) return 'silver';
+            if (fastTasks >= 10) return 'bronze';
+            return '';
+        }
+
+        function updateRanking() {
+            const medal = getMedal(tasks);
+            rankings.push({name: playerName, score: points, medal: medal});
+            rankings.sort((a, b) => b.score - a.score);
+            rankings = rankings.slice(0, 10); // Keep only top 10
+            localStorage.setItem('rankings', JSON.stringify(rankings));
+
+            const rankingHTML = rankings.map((entry, index) => 
+                `<p ${entry.name === playerName && entry.score === points ? 'class="highlight"' : ''}>
+                    ${index + 1}. ${entry.name}: ${entry.score} points
+                    ${entry.medal ? `<span class="medal ${entry.medal}"></span>` : ''}
+                </p>`
+            ).join('');
+            rankingDiv.innerHTML = '<h3>Top 10 Rankings:</h3>' + rankingHTML;
+        }
+
+        function restartGame() {
+            overviewDiv.style.display = 'none';
+            startScreen.style.display = 'block';
+            playerNameInput.value = '';
+        }
+
+        submitBtn.addEventListener('click', checkAnswer);
+        seeResultBtn.addEventListener('click', showOverview);
+        restartBtn.addEventListener('click', restartGame);
+        startGameBtn.addEventListener('click', startGame);
+        answerInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                checkAnswer();
+            }
+        });
+    </script>
+</body>
+</html>
